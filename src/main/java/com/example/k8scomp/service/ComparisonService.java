@@ -75,6 +75,40 @@ public class ComparisonService {
         return istioResults;
     }
 
+    public List<Map<String, Object>> compareLiveWithSpecs(List<? extends HasMetadata> liveResources, List<Object> baselineSpecs) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        Map<String, Object> baselineMap = new HashMap<>();
+        
+        // Convert baseline specs to a map for easy lookup by name
+        for (Object spec : baselineSpecs) {
+            if (spec instanceof Map) {
+                Map<String, Object> metadata = (Map<String, Object>) ((Map<String, Object>) spec).get("metadata");
+                if (metadata != null) baselineMap.put((String) metadata.get("name"), spec);
+            } else if (spec instanceof HasMetadata) {
+                baselineMap.put(((HasMetadata) spec).getMetadata().getName(), spec);
+            }
+        }
+
+        for (HasMetadata live : liveResources) {
+            String name = live.getMetadata().getName();
+            Object baseline = baselineMap.get(name);
+            Map<String, Object> diff = new HashMap<>();
+            diff.put("name", name);
+            
+            if (baseline == null) {
+                diff.put("status", "ONLY_IN_LIVE");
+            } else {
+                // Simplified comparison: compare string representations
+                boolean equal = Objects.equals(live.toString(), baseline.toString());
+                diff.put("status", equal ? "MATCH" : "DIFFERENT");
+                diff.put("liveValue", live);
+                diff.put("baselineValue", baseline);
+            }
+            results.add(diff);
+        }
+        return results;
+    }
+
     private <T extends HasMetadata> List<Map<String, Object>> compareResources(List<T> list1, List<T> list2) {
         List<Map<String, Object>> results = new ArrayList<>();
         Map<String, T> map2 = list2.stream().collect(Collectors.toMap(r -> r.getMetadata().getName(), r -> r));

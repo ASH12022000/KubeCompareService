@@ -17,20 +17,33 @@ public class ComparisonController {
     private final com.example.k8scomp.service.HistoryService historyService;
     private final com.example.k8scomp.service.ExportService exportService;
 
+    private final com.example.k8scomp.repository.HistoryRepository historyRepository;
+
     public ComparisonController(K8sClientFactory clientFactory, ComparisonService comparisonService, 
                                 com.example.k8scomp.service.HistoryService historyService,
+                                com.example.k8scomp.repository.HistoryRepository historyRepository,
                                 com.example.k8scomp.service.ExportService exportService) {
         this.clientFactory = clientFactory;
         this.comparisonService = comparisonService;
         this.historyService = historyService;
+        this.historyRepository = historyRepository;
         this.exportService = exportService;
     }
 
-    @PostMapping("/export/{historyId}")
+    @GetMapping("/export/{historyId}")
     public ResponseEntity<byte[]> exportHistory(@PathVariable String historyId) {
-        return ResponseEntity.ok()
-            .header("Content-Disposition", "attachment; filename=report.pdf")
-            .body(new byte[0]); 
+        return historyRepository.findById(historyId)
+            .map(history -> {
+                // Convert list of CategoryResult back to Map for ExportService
+                Map<String, Object> resultsMap = new HashMap<>();
+                history.getResults().forEach(r -> resultsMap.put(r.getCategory(), r.getDetails()));
+                
+                byte[] pdf = exportService.generatePdfReport(resultsMap);
+                return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=report.pdf")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                    .body(pdf);
+            }).orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/connect")
@@ -79,11 +92,8 @@ public class ComparisonController {
                 results.put("istio", comparisonService.compareIstio(c1, c2, request.getNs1(), request.getNs2()));
             }
             
-            // Save to History
-            com.example.k8scomp.model.ComparisonHistory history = new com.example.k8scomp.model.ComparisonHistory();
-            history.setTimestamp(java.time.LocalDateTime.now().toString());
-            // Map results to CategoryResult list here if needed, for now storing as is or via helper
-            historyService.saveHistory(history);
+            // Save full results to History
+            historyService.saveHistory("system", results); 
             
             // Log Audit
             historyService.logAudit("system", "RUN_COMPARISON", "Compared " + request.getNs1() + " vs " + request.getNs2());
