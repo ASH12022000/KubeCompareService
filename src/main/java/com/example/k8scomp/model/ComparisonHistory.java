@@ -12,5 +12,13 @@ public class ComparisonHistory {
     private String id;
     private String userId;
     private String timestamp;
+
+    // Context fields (populated from the request, displayed in UI)
+    private String primaryClusterUrl;
+    private String comparisonClusterUrl;
+    private String primaryNamespace;
+    private String comparisonNamespace;
+    private String status; // "SUCCESS" | "ERROR"
+
     private List<CategoryResult> results;
 }

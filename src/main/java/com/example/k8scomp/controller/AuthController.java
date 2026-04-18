@@ -26,15 +26,34 @@ public class AuthController {
     public ResponseEntity<?> verify(@RequestBody Map<String, String> request) {
         boolean ok = authService.verifyOtp(request.get("email"), request.get("otp"));
         if (ok)
-            return ResponseEntity.ok(Map.of("message", "Verified"));
+            return ResponseEntity.ok(Map.of("message", "Verified. You can now log in."));
         return ResponseEntity.status(401).body(Map.of("error", "Invalid OTP"));
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> request) {
-        String token = authService.login(request.get("email"), request.get("password"));
-        if (token != null)
-            return ResponseEntity.ok(Map.of("token", token));
-        return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials or not verified"));
+        Map<String, String> result = authService.login(request.get("email"), request.get("password"));
+        if (result != null)
+            return ResponseEntity.ok(result); // { token, userId, email }
+        return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials or account not verified"));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> request) {
+        boolean sent = authService.forgotPassword(request.get("email"));
+        // Always return 200 to avoid email enumeration attacks
+        return ResponseEntity.ok(Map.of("message", "If this email is registered, a reset link has been sent."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> request) {
+        boolean ok = authService.resetPassword(
+            request.get("email"),
+            request.get("token"),
+            request.get("newPassword")
+        );
+        if (ok)
+            return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
+        return ResponseEntity.status(400).body(Map.of("error", "Invalid or expired token."));
     }
 }

@@ -7,6 +7,7 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/comparison")
@@ -92,15 +93,43 @@ public class ComparisonController {
                 results.put("istio", comparisonService.compareIstio(c1, c2, request.getNs1(), request.getNs2()));
             }
             
-            // Save full results to History
-            historyService.saveHistory("system", results); 
-            
+            // Save full results to History with real userId and display context
+            String userId = (request.getUserId() != null && !request.getUserId().isBlank())
+                ? request.getUserId() : "anonymous";
+
+            String primaryUrl    = env1.getJumpHost() != null && !env1.getJumpHost().isBlank()
+                ? "jump://" + env1.getJumpHost() : env1.getClusterUrl();
+            String comparisonUrl = env2.getJumpHost() != null && !env2.getJumpHost().isBlank()
+                ? "jump://" + env2.getJumpHost() : env2.getClusterUrl();
+
+            historyService.saveHistory(userId, results,
+                primaryUrl, comparisonUrl,
+                request.getNs1(), request.getNs2());
+
             // Log Audit
-            historyService.logAudit("system", "RUN_COMPARISON", "Compared " + request.getNs1() + " vs " + request.getNs2());
+            historyService.logAudit(userId, "RUN_COMPARISON", "Compared " + request.getNs1() + " vs " + request.getNs2());
             
             return ResponseEntity.ok(results);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @GetMapping("/history/{userId}")
+    public ResponseEntity<List<com.example.k8scomp.model.ComparisonHistory>> getUserHistory(@PathVariable String userId) {
+        return ResponseEntity.ok(historyRepository.findTop10ByUserIdOrderByTimestampDesc(userId));
+    }
+
+    @DeleteMapping("/history/{userId}/{id}")
+    public ResponseEntity<?> deleteUserHistory(@PathVariable String userId, @PathVariable String id) {
+        return historyRepository.findById(id)
+            .map(record -> {
+                if (!record.getUserId().equals(userId)) {
+                    return ResponseEntity.status(403).body("Forbidden: record does not belong to this user");
+                }
+                historyRepository.deleteById(id);
+                return ResponseEntity.ok().build();
+            })
+            .orElse(ResponseEntity.notFound().build());
     }
 }

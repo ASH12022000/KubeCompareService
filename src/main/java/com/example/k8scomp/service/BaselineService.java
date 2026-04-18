@@ -1,12 +1,11 @@
 package com.example.k8scomp.service;
 
 import com.example.k8scomp.model.BaselineSnapshot;
-import com.example.k8scomp.model.CategoryResult;
 import com.example.k8scomp.model.SavedEnvironment;
 import com.example.k8scomp.repository.BaselineRepository;
-import com.example.k8scomp.repository.EnvironmentRepository;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.springframework.stereotype.Service;
+
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -14,93 +13,143 @@ import java.util.*;
 public class BaselineService {
 
     private final BaselineRepository baselineRepository;
-    private final EnvironmentRepository environmentRepository;
     private final K8sClientFactory clientFactory;
     private final ComparisonService comparisonService;
 
-    public BaselineService(BaselineRepository baselineRepository, EnvironmentRepository environmentRepository,
-                           K8sClientFactory clientFactory, ComparisonService comparisonService) {
+    public BaselineService(BaselineRepository baselineRepository,
+                           K8sClientFactory clientFactory,
+                           ComparisonService comparisonService) {
         this.baselineRepository = baselineRepository;
-        this.environmentRepository = environmentRepository;
         this.clientFactory = clientFactory;
         this.comparisonService = comparisonService;
     }
 
-    public BaselineSnapshot captureAndSave(String envId, String ns, List<String> checks) throws Exception {
-        SavedEnvironment env = environmentRepository.findById(envId)
-                .orElseThrow(() -> new RuntimeException("Environment not found"));
+    /**
+     * Captures live resources from a cluster and persists them as a baseline snapshot.
+     * Connection details are passed directly (no pre-saved environment lookup required).
+     */
+    public BaselineSnapshot captureAndSave(String environmentId, String ns, List<String> checks,
+                                           String jumpHost, String jumpUser, String jumpPassword,
+                                           String clusterUrl, String token) throws Exception {
 
-        try (KubernetesClient client = clientFactory.createClient(env.getType(), env.getClusterUrl(), 
-                                                                env.getEncryptedToken(), env.getJumpHost(), 
-                                                                env.getJumpUser(), env.getEncryptedJumpPassword())) {
-            
+        try (KubernetesClient client = clientFactory.createClient(
+                jumpHost.isBlank() ? "DIRECT" : "JUMP",
+                clusterUrl, token, jumpHost, jumpUser, jumpPassword)) {
+
             Map<String, List<Object>> specs = new HashMap<>();
+
             if (checks.contains("DEPLOYMENTS")) {
-                specs.put("deployments", (List) client.apps().deployments().inNamespace(ns).list().getItems());
+                specs.put("deployments", (List<Object>) (List<?>) client.apps().deployments().inNamespace(ns).list().getItems());
             }
             if (checks.contains("CONFIGMAPS")) {
-                specs.put("configmaps", (List) client.configMaps().inNamespace(ns).list().getItems());
+                specs.put("configmaps", (List<Object>) (List<?>) client.configMaps().inNamespace(ns).list().getItems());
             }
             if (checks.contains("SERVICES")) {
-                specs.put("services", (List) client.services().inNamespace(ns).list().getItems());
+                specs.put("services", (List<Object>) (List<?>) client.services().inNamespace(ns).list().getItems());
             }
             if (checks.contains("PVC")) {
-                specs.put("pvcs", (List) client.persistentVolumeClaims().inNamespace(ns).list().getItems());
+                specs.put("pvcs", (List<Object>) (List<?>) client.persistentVolumeClaims().inNamespace(ns).list().getItems());
+            }
+            if (checks.contains("IMAGES")) {
+                // Extract container images from deployments
+                List<Object> images = new ArrayList<>();
+                client.apps().deployments().inNamespace(ns).list().getItems().forEach(d ->
+                    d.getSpec().getTemplate().getSpec().getContainers().forEach(c ->
+                        images.add(Map.of("deployment", d.getMetadata().getName(), "image", c.getImage()))
+                    )
+                );
+                specs.put("images", images);
             }
             if (checks.contains("VIRTUALSERVICES")) {
-                specs.put("virtualservices", (List) client.resources(io.fabric8.istio.api.networking.v1alpha3.VirtualService.class).inNamespace(ns).list().getItems());
+                specs.put("virtualservices", (List<Object>) (List<?>) client
+                    .resources(io.fabric8.istio.api.networking.v1alpha3.VirtualService.class)
+                    .inNamespace(ns).list().getItems());
             }
             if (checks.contains("AUTH_POLICY")) {
-                specs.put("authpolicies", (List) client.resources(io.fabric8.istio.api.security.v1beta1.AuthorizationPolicy.class).inNamespace(ns).list().getItems());
+                specs.put("authpolicies", (List<Object>) (List<?>) client
+                    .resources(io.fabric8.istio.api.security.v1beta1.AuthorizationPolicy.class)
+                    .inNamespace(ns).list().getItems());
             }
-            
+
             BaselineSnapshot snapshot = new BaselineSnapshot();
-            snapshot.setEnvironmentId(envId);
+            snapshot.setEnvironmentId(environmentId);
             snapshot.setTimestamp(LocalDateTime.now().toString());
             snapshot.setResourceSpecs(specs);
-            
-            return baselineRepository.save(snapshot);
+            // Populated by the controller with userId, name, etc. before final save
+            return snapshot;
         }
     }
 
-    public Map<String, Object> compareLiveWithBaseline(String envId, String snapshotId, String ns, List<String> checks) throws Exception {
-        SavedEnvironment env = environmentRepository.findById(envId)
-                .orElseThrow(() -> new RuntimeException("Environment not found"));
+    /**
+     * Compares the current live state of a cluster against a stored baseline snapshot.
+     * Uses connection details already persisted on the snapshot itself — no extra input needed.
+     */
+    public Map<String, Object> compareLiveWithBaseline(String snapshotId) throws Exception {
         BaselineSnapshot snapshot = baselineRepository.findById(snapshotId)
-                .orElseThrow(() -> new RuntimeException("Baseline snapshot not found"));
+                .orElseThrow(() -> new RuntimeException("Baseline snapshot not found: " + snapshotId));
 
-        try (KubernetesClient liveClient = clientFactory.createClient(env.getType(), env.getClusterUrl(), 
-                                                                    env.getEncryptedToken(), env.getJumpHost(), 
-                                                                    env.getJumpUser(), env.getEncryptedJumpPassword())) {
-            
+        String jumpHost    = snapshot.getJumpHost()     != null ? snapshot.getJumpHost()     : "";
+        String jumpUser    = snapshot.getJumpUser()     != null ? snapshot.getJumpUser()     : "";
+        String clusterUrl  = snapshot.getClusterUrl()   != null ? snapshot.getClusterUrl()   : "";
+        String ns          = snapshot.getNamespace()    != null ? snapshot.getNamespace()    : "default";
+        Map<String, List<Object>> baselineSpecs = snapshot.getResourceSpecs();
+
+        try (KubernetesClient liveClient = clientFactory.createClient(
+                jumpHost.isBlank() ? "DIRECT" : "JUMP",
+                clusterUrl, "", jumpHost, jumpUser, "")) {
+
             Map<String, Object> diffResults = new HashMap<>();
-            Map<String, List<Object>> baselineSpecs = snapshot.getResourceSpecs();
 
-            if (checks.contains("DEPLOYMENTS") && baselineSpecs.containsKey("deployments")) {
+            if (baselineSpecs.containsKey("deployments")) {
                 var live = liveClient.apps().deployments().inNamespace(ns).list().getItems();
                 diffResults.put("deployments", comparisonService.compareLiveWithSpecs(live, baselineSpecs.get("deployments")));
             }
-            if (checks.contains("CONFIGMAPS") && baselineSpecs.containsKey("configmaps")) {
+            if (baselineSpecs.containsKey("configmaps")) {
                 var live = liveClient.configMaps().inNamespace(ns).list().getItems();
                 diffResults.put("configmaps", comparisonService.compareLiveWithSpecs(live, baselineSpecs.get("configmaps")));
             }
-            if (checks.contains("SERVICES") && baselineSpecs.containsKey("services")) {
+            if (baselineSpecs.containsKey("services")) {
                 var live = liveClient.services().inNamespace(ns).list().getItems();
                 diffResults.put("services", comparisonService.compareLiveWithSpecs(live, baselineSpecs.get("services")));
             }
-            if (checks.contains("PVC") && baselineSpecs.containsKey("pvcs")) {
+            if (baselineSpecs.containsKey("pvcs")) {
                 var live = liveClient.persistentVolumeClaims().inNamespace(ns).list().getItems();
                 diffResults.put("pvcs", comparisonService.compareLiveWithSpecs(live, baselineSpecs.get("pvcs")));
             }
-            if (checks.contains("VIRTUALSERVICES") && baselineSpecs.containsKey("virtualservices")) {
-                var live = liveClient.resources(io.fabric8.istio.api.networking.v1alpha3.VirtualService.class).inNamespace(ns).list().getItems();
+            if (baselineSpecs.containsKey("images")) {
+                // Re-extract live images as plain maps
+                List<Map<String, String>> liveImages = new ArrayList<>();
+                liveClient.apps().deployments().inNamespace(ns).list().getItems().forEach(d ->
+                    d.getSpec().getTemplate().getSpec().getContainers().forEach(c ->
+                        liveImages.add(Map.of("deployment", d.getMetadata().getName(), "image", c.getImage()))
+                    )
+                );
+
+                // Compare image maps directly (not HasMetadata objects)
+                List<Map<String, Object>> imageDiffs = new ArrayList<>();
+                List<Object> baselineImages = baselineSpecs.get("images");
+                for (Map<String, String> live : liveImages) {
+                    boolean found = baselineImages.stream().anyMatch(b ->
+                        b instanceof Map && live.get("deployment").equals(((Map<?,?>) b).get("deployment"))
+                            && live.get("image").equals(((Map<?,?>) b).get("image")));
+                    if (!found) {
+                        imageDiffs.add(Map.of("name", live.get("deployment"), "status", "MISMATCH",
+                            "liveImage", live.get("image")));
+                    }
+                }
+                diffResults.put("images", imageDiffs);
+            }
+            if (baselineSpecs.containsKey("virtualservices")) {
+                var live = liveClient.resources(io.fabric8.istio.api.networking.v1alpha3.VirtualService.class)
+                    .inNamespace(ns).list().getItems();
                 diffResults.put("virtualservices", comparisonService.compareLiveWithSpecs(live, baselineSpecs.get("virtualservices")));
             }
-            if (checks.contains("AUTH_POLICY") && baselineSpecs.containsKey("authpolicies")) {
-                var live = liveClient.resources(io.fabric8.istio.api.security.v1beta1.AuthorizationPolicy.class).inNamespace(ns).list().getItems();
+            if (baselineSpecs.containsKey("authpolicies")) {
+                var live = liveClient.resources(io.fabric8.istio.api.security.v1beta1.AuthorizationPolicy.class)
+                    .inNamespace(ns).list().getItems();
                 diffResults.put("authpolicies", comparisonService.compareLiveWithSpecs(live, baselineSpecs.get("authpolicies")));
             }
-            
+
             return diffResults;
         }
     }

@@ -11,7 +11,13 @@ import java.util.List;
 public class BaselineSnapshot {
     @Id
     private String id;
-    private String environmentId;
+    private String userId;
+    private String name;           // e.g. "Dev Cluster Baseline"
+    private String environmentId;  // logical env identifier (jumpHost:namespace)
+    private String namespace;
+    private String clusterUrl;
+    private String jumpHost;
+    private String jumpUser;
     private String timestamp;
-    private Map<String, List<Object>> resourceSpecs; // Stores category -> list of resource YAML/JSON
+    private Map<String, List<Object>> resourceSpecs;
 }

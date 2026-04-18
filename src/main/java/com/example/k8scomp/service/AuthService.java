@@ -7,7 +7,10 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -17,7 +20,7 @@ public class AuthService {
     private final JavaMailSender mailSender;
     private final JwtUtils jwtUtils;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, 
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                        JavaMailSender mailSender, JwtUtils jwtUtils) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -34,15 +37,7 @@ public class AuthService {
         String otp = String.format("%06d", new Random().nextInt(999999));
         user.setOtp(otp);
         userRepository.save(user);
-        sendOtpEmail(email, otp);
-    }
-
-    private void sendOtpEmail(String email, String otp) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(email);
-        message.setSubject("K8s Comparator OTP Verification");
-        message.setText("Your OTP is: " + otp);
-        mailSender.send(message);
+        sendEmail(email, "K8s Comparator OTP Verification", "Your OTP is: " + otp);
     }
 
     public boolean verifyOtp(String email, String otp) {
@@ -58,11 +53,57 @@ public class AuthService {
                 }).orElse(false);
     }
 
-    public String login(String email, String password) {
+    /**
+     * Authenticates a user and returns { token, userId, email } or null.
+     */
+    public Map<String, String> login(String email, String password) {
         return userRepository.findByEmail(email)
                 .filter(User::isVerified)
                 .filter(user -> passwordEncoder.matches(password, user.getPassword()))
-                .map(user -> jwtUtils.generateToken(email))
+                .map(user -> Map.of(
+                    "token",  jwtUtils.generateToken(email),
+                    "userId", user.getId(),
+                    "email",  user.getEmail()
+                ))
                 .orElse(null);
+    }
+
+    /**
+     * Initiates a password reset: generates a reset token and emails it.
+     */
+    public boolean forgotPassword(String email) {
+        return userRepository.findByEmail(email).map(user -> {
+            String resetToken = UUID.randomUUID().toString();
+            user.setOtp(resetToken); // reuse OTP field for reset token
+            userRepository.save(user);
+            sendEmail(email,
+                "K8s Comparator — Password Reset",
+                "Your password reset token is: " + resetToken +
+                "\n\nUse this in the Reset Password screen within 15 minutes.");
+            return true;
+        }).orElse(false);
+    }
+
+    /**
+     * Resets the password if the token matches.
+     */
+    public boolean resetPassword(String email, String token, String newPassword) {
+        return userRepository.findByEmail(email).map(user -> {
+            if (token.equals(user.getOtp())) {
+                user.setPassword(passwordEncoder.encode(newPassword));
+                user.setOtp(null);
+                userRepository.save(user);
+                return true;
+            }
+            return false;
+        }).orElse(false);
+    }
+
+    private void sendEmail(String to, String subject, String text) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(to);
+        message.setSubject(subject);
+        message.setText(text);
+        mailSender.send(message);
     }
 }

@@ -10,6 +10,7 @@ public class ComparisonRequest {
     private String ns2;
     private List<String> checks;
     private List<String> exclusions;
+    private String userId;
 
     public SavedEnvironment getEnv1() { return env1; }
     public void setEnv1(SavedEnvironment env1) { this.env1 = env1; }
@@ -23,4 +24,6 @@ public class ComparisonRequest {
     public void setChecks(List<String> checks) { this.checks = checks; }
     public List<String> getExclusions() { return exclusions; }
     public void setExclusions(List<String> exclusions) { this.exclusions = exclusions; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
 }
