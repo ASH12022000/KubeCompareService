@@ -14,4 +14,7 @@ public class User {
     private boolean verified;
     private String otp;
     private java.time.LocalDateTime createdAt;
+    private String displayName;
+    private String organization;
+    private java.time.LocalDateTime otpExpiry;
 }

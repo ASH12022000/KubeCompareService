@@ -89,4 +89,62 @@ public class AuthController {
         log.warn("Password reset FAILED for email={} — invalid or expired token", email);
         return ResponseEntity.status(400).body(Map.of("error", "Invalid or expired token."));
     }
+
+    @GetMapping("/profile/{userId}")
+    public ResponseEntity<?> getProfile(@PathVariable String userId) {
+        try {
+            return ResponseEntity.ok(authService.getProfile(userId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/profile/{userId}")
+    public ResponseEntity<?> updateProfile(@PathVariable String userId, @RequestBody Map<String, String> request) {
+        log.info("Update profile request for userId={}", userId);
+        authService.updateProfile(userId, request.get("displayName"), request.get("organization"));
+        return ResponseEntity.ok(Map.of("message", "Profile updated successfully"));
+    }
+
+    @PostMapping("/send-change-password-otp")
+    public ResponseEntity<?> sendChangePasswordOtp(@RequestBody Map<String, String> request) {
+        String userId = request.get("userId");
+        boolean sent = authService.sendChangePasswordOtp(userId);
+        if (sent) return ResponseEntity.ok(Map.of("message", "OTP sent to your email"));
+        return ResponseEntity.status(400).body(Map.of("error", "Could not send OTP"));
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> request) {
+        String userId = request.get("userId");
+        boolean changed = authService.changePassword(
+            userId, 
+            request.get("oldPassword"), 
+            request.get("newPassword"), 
+            request.get("otp")
+        );
+        if (changed) return ResponseEntity.ok(Map.of("message", "Password changed successfully"));
+        return ResponseEntity.status(400).body(Map.of("error", "Invalid OTP or old password"));
+    }
+
+    @DeleteMapping("/account/{userId}")
+    public ResponseEntity<?> deleteAccount(@PathVariable String userId, @RequestBody Map<String, String> request) {
+        String confirmEmail = request.get("confirmEmail");
+        try {
+            Map<String, Object> profile = authService.getProfile(userId);
+            if (!profile.get("email").equals(confirmEmail)) {
+                return ResponseEntity.status(400).body(Map.of("error", "Email does not match"));
+            }
+            authService.deleteAccount(userId);
+            return ResponseEntity.ok(Map.of("message", "Account deleted successfully"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/report-bug")
+    public ResponseEntity<?> reportBug(@RequestBody Map<String, String> request) {
+        authService.reportBug(request.get("userId"), request.get("subject"), request.get("description"));
+        return ResponseEntity.ok(Map.of("message", "Bug report sent successfully"));
+    }
 }
