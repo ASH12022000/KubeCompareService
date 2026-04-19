@@ -18,13 +18,14 @@ public class CleanupService {
     }
 
     // Runs every hour to check for expired unverified users
-    @Scheduled(fixedRate = 3600000)
+    @Scheduled(fixedRate = 120000)
     public void deleteUnverifiedUsers() {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(1);
-        
+
         // Fetch all unverified users created before the cutoff
         List<User> expiredUsers = userRepository.findAll().stream()
-                .filter(user -> !user.isVerified() && user.getCreatedAt() != null && user.getCreatedAt().isBefore(cutoff))
+                .filter(user -> !user.isVerified() && user.getCreatedAt() != null
+                        && user.getCreatedAt().isBefore(cutoff))
                 .collect(Collectors.toList());
 
         if (!expiredUsers.isEmpty()) {
