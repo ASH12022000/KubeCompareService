@@ -17,8 +17,15 @@ public class K8sClientFactory {
     private static final Logger log = LoggerFactory.getLogger(K8sClientFactory.class);
 
     public KubernetesClient createClient(String type, String clusterUrl, String token,
-                                        String jumpHost, String jumpUser, String jumpPassword) throws Exception {
+                                        String jumpHost, String jumpUser, String jumpPassword, String kubeconfig) throws Exception {
         log.info("Creating K8s client: type={}, clusterUrl={}, jumpHost={}", type, clusterUrl, jumpHost);
+
+        if ("KUBECONFIG".equalsIgnoreCase(type)) {
+            log.info("Creating client from kubeconfig content");
+            return new KubernetesClientBuilder()
+                    .withConfig(Config.fromKubeconfig(kubeconfig))
+                    .build();
+        }
 
         if ("JUMP".equalsIgnoreCase(type)) {
             log.info("Establishing SSH tunnel to {}@{}:22", jumpUser, jumpHost);

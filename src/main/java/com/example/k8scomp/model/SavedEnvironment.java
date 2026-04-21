@@ -13,6 +13,7 @@ public class SavedEnvironment {
     private String name;
     private String type; // JUMP or DIRECT
     private String clusterUrl;
+    private String kubeconfig;
     private String encryptedToken;
     private String jumpHost;
     private String jumpUser;

@@ -18,6 +18,7 @@ public class BaselineSnapshot {
     private String clusterUrl;
     private String jumpHost;
     private String jumpUser;
+    private String kubeconfig;
     private String timestamp;
     private Map<String, List<Object>> resourceSpecs;
 }

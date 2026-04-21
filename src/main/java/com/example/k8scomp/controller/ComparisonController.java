@@ -59,8 +59,9 @@ public class ComparisonController {
         log.info("Connection test: type={}, jumpHost={}, clusterUrl={}", env.getType(), env.getJumpHost(), env.getClusterUrl());
         try {
             KubernetesClient client = clientFactory.createClient(env.getType(), env.getClusterUrl(),
-                                                                env.getEncryptedToken(), env.getJumpHost(),
-                                                                env.getJumpUser(), env.getEncryptedJumpPassword());
+                                                                 env.getEncryptedToken(), env.getJumpHost(),
+                                                                 env.getJumpUser(), env.getEncryptedJumpPassword(),
+                                                                 env.getKubeconfig());
             client.namespaces().list();
             log.info("Connection test SUCCESS for {}", env.getJumpHost() != null ? env.getJumpHost() : env.getClusterUrl());
             return ResponseEntity.ok(Map.of("status", "SUCCESS"));
@@ -79,13 +80,15 @@ public class ComparisonController {
             log.debug("Creating K8s client for cluster1: type={}, jumpHost={}", env1.getType(), env1.getJumpHost());
             KubernetesClient c1 = clientFactory.createClient(env1.getType(), env1.getClusterUrl(),
                                                            env1.getEncryptedToken(), env1.getJumpHost(),
-                                                           env1.getJumpUser(), env1.getEncryptedJumpPassword());
+                                                           env1.getJumpUser(), env1.getEncryptedJumpPassword(),
+                                                           env1.getKubeconfig());
 
             SavedEnvironment env2 = request.getEnv2();
             log.debug("Creating K8s client for cluster2: type={}, jumpHost={}", env2.getType(), env2.getJumpHost());
             KubernetesClient c2 = clientFactory.createClient(env2.getType(), env2.getClusterUrl(),
                                                            env2.getEncryptedToken(), env2.getJumpHost(),
-                                                           env2.getJumpUser(), env2.getEncryptedJumpPassword());
+                                                           env2.getJumpUser(), env2.getEncryptedJumpPassword(),
+                                                           env2.getKubeconfig());
 
             Map<String, Object> results = new HashMap<>();
             if (request.getChecks().contains("DEPLOYMENTS")) {

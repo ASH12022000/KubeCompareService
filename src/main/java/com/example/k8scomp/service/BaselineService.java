@@ -17,29 +17,32 @@ public class BaselineService {
     private final ComparisonService comparisonService;
 
     public BaselineService(BaselineRepository baselineRepository,
-                           K8sClientFactory clientFactory,
-                           ComparisonService comparisonService) {
+            K8sClientFactory clientFactory,
+            ComparisonService comparisonService) {
         this.baselineRepository = baselineRepository;
         this.clientFactory = clientFactory;
         this.comparisonService = comparisonService;
     }
 
     /**
-     * Captures live resources from a cluster and persists them as a baseline snapshot.
-     * Connection details are passed directly (no pre-saved environment lookup required).
+     * Captures live resources from a cluster and persists them as a baseline
+     * snapshot.
+     * Connection details are passed directly (no pre-saved environment lookup
+     * required).
      */
     public BaselineSnapshot captureAndSave(String environmentId, String ns, List<String> checks,
-                                           String jumpHost, String jumpUser, String jumpPassword,
-                                           String clusterUrl, String token) throws Exception {
+            String jumpHost, String jumpUser, String jumpPassword,
+            String clusterUrl, String token, String kubeconfig) throws Exception {
 
         try (KubernetesClient client = clientFactory.createClient(
-                jumpHost.isBlank() ? "DIRECT" : "JUMP",
-                clusterUrl, token, jumpHost, jumpUser, jumpPassword)) {
+                kubeconfig != null && !kubeconfig.isBlank() ? "KUBECONFIG" : (jumpHost.isBlank() ? "DIRECT" : "JUMP"),
+                clusterUrl, token, jumpHost, jumpUser, jumpPassword, kubeconfig)) {
 
             Map<String, List<Object>> specs = new HashMap<>();
 
             if (checks.contains("DEPLOYMENTS")) {
-                specs.put("deployments", (List<Object>) (List<?>) client.apps().deployments().inNamespace(ns).list().getItems());
+                specs.put("deployments",
+                        (List<Object>) (List<?>) client.apps().deployments().inNamespace(ns).list().getItems());
             }
             if (checks.contains("CONFIGMAPS")) {
                 specs.put("configmaps", (List<Object>) (List<?>) client.configMaps().inNamespace(ns).list().getItems());
@@ -48,27 +51,26 @@ public class BaselineService {
                 specs.put("services", (List<Object>) (List<?>) client.services().inNamespace(ns).list().getItems());
             }
             if (checks.contains("PVC")) {
-                specs.put("pvcs", (List<Object>) (List<?>) client.persistentVolumeClaims().inNamespace(ns).list().getItems());
+                specs.put("pvcs",
+                        (List<Object>) (List<?>) client.persistentVolumeClaims().inNamespace(ns).list().getItems());
             }
             if (checks.contains("IMAGES")) {
                 // Extract container images from deployments
                 List<Object> images = new ArrayList<>();
-                client.apps().deployments().inNamespace(ns).list().getItems().forEach(d ->
-                    d.getSpec().getTemplate().getSpec().getContainers().forEach(c ->
-                        images.add(Map.of("deployment", d.getMetadata().getName(), "image", c.getImage()))
-                    )
-                );
+                client.apps().deployments().inNamespace(ns).list().getItems()
+                        .forEach(d -> d.getSpec().getTemplate().getSpec().getContainers().forEach(c -> images
+                                .add(Map.of("deployment", d.getMetadata().getName(), "image", c.getImage()))));
                 specs.put("images", images);
             }
             if (checks.contains("VIRTUALSERVICES")) {
                 specs.put("virtualservices", (List<Object>) (List<?>) client
-                    .resources(io.fabric8.istio.api.networking.v1alpha3.VirtualService.class)
-                    .inNamespace(ns).list().getItems());
+                        .resources(io.fabric8.istio.api.networking.v1alpha3.VirtualService.class)
+                        .inNamespace(ns).list().getItems());
             }
             if (checks.contains("AUTH_POLICY")) {
                 specs.put("authpolicies", (List<Object>) (List<?>) client
-                    .resources(io.fabric8.istio.api.security.v1beta1.AuthorizationPolicy.class)
-                    .inNamespace(ns).list().getItems());
+                        .resources(io.fabric8.istio.api.security.v1beta1.AuthorizationPolicy.class)
+                        .inNamespace(ns).list().getItems());
             }
 
             BaselineSnapshot snapshot = new BaselineSnapshot();
@@ -92,12 +94,10 @@ public class BaselineService {
         String jumpUser    = snapshot.getJumpUser()     != null ? snapshot.getJumpUser()     : "";
         String clusterUrl  = snapshot.getClusterUrl()   != null ? snapshot.getClusterUrl()   : "";
         String ns          = snapshot.getNamespace()    != null ? snapshot.getNamespace()    : "default";
+        String kubeconfig  = snapshot.getKubeconfig()   != null ? snapshot.getKubeconfig()   : "";
         Map<String, List<Object>> baselineSpecs = snapshot.getResourceSpecs();
 
-        try (KubernetesClient liveClient = clientFactory.createClient(
-                jumpHost.isBlank() ? "DIRECT" : "JUMP",
-                clusterUrl, "", jumpHost, jumpUser, "")) {
-
+        try (KubernetesClient liveClient = clientFactory.createClient(kubeconfig != null && !kubeconfig.isBlank() ? "KUBECONFIG" : (jumpHost.isBlank() ? "DIRECT" : "JUMP"), clusterUrl, "", jumpHost, jumpUser, "", kubeconfig)) {
             Map<String, Object> diffResults = new HashMap<>();
 
             if (baselineSpecs.containsKey("deployments")) {

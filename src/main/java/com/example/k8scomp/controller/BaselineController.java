@@ -55,11 +55,13 @@ public class BaselineController {
             String jumpHost     = (String) body.getOrDefault("jumpHost", "");
             String jumpUser     = (String) body.getOrDefault("jumpUser", "");
             String jumpPassword = (String) body.getOrDefault("jumpPassword", "");
+            String kubeconfig   = (String) body.getOrDefault("kubeconfig", "");
             boolean override    = Boolean.TRUE.equals(body.get("override"));
             @SuppressWarnings("unchecked")
             List<String> checks = (List<String>) body.getOrDefault("checks", List.of("DEPLOYMENTS", "CONFIGMAPS"));
 
-            String environmentId = jumpHost.isBlank() ? (clusterUrl + ":" + namespace) : (jumpHost + ":" + namespace);
+            String environmentId = !kubeconfig.isBlank() ? "kubeconfig:" + namespace :
+                                  (jumpHost.isBlank() ? (clusterUrl + ":" + namespace) : (jumpHost + ":" + namespace));
             log.debug("Computed environmentId={}, override={}, checks={}", environmentId, override, checks);
 
             Optional<BaselineSnapshot> existing = baselineRepository.findByUserIdAndEnvironmentId(userId, environmentId);
@@ -81,7 +83,7 @@ public class BaselineController {
             BaselineSnapshot snapshot = baselineService.captureAndSave(
                 environmentId, namespace, checks,
                 jumpHost, jumpUser, jumpPassword,
-                clusterUrl, ""
+                clusterUrl, "", kubeconfig
             );
             snapshot.setUserId(userId);
             snapshot.setName(name);
@@ -89,6 +91,7 @@ public class BaselineController {
             snapshot.setClusterUrl(clusterUrl);
             snapshot.setJumpHost(jumpHost);
             snapshot.setJumpUser(jumpUser);
+            snapshot.setKubeconfig(kubeconfig);
             snapshot.setEnvironmentId(environmentId);
             snapshot.setTimestamp(Instant.now().toString());
             baselineRepository.save(snapshot);

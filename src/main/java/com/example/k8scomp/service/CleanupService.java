@@ -17,7 +17,7 @@ public class CleanupService {
         this.userRepository = userRepository;
     }
 
-    // Runs every hour to check for expired unverified users
+    // Runs every 2 minutes to check for expired unverified users
     @Scheduled(fixedRate = 120000)
     public void deleteUnverifiedUsers() {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(1);
