@@ -93,11 +93,13 @@ public class BaselineService {
         String jumpHost    = snapshot.getJumpHost()     != null ? snapshot.getJumpHost()     : "";
         String jumpUser    = snapshot.getJumpUser()     != null ? snapshot.getJumpUser()     : "";
         String clusterUrl  = snapshot.getClusterUrl()   != null ? snapshot.getClusterUrl()   : "";
+        String token       = snapshot.getToken()        != null ? snapshot.getToken()        : "";
+        String jumpPassword = snapshot.getJumpPassword() != null ? snapshot.getJumpPassword() : "";
         String ns          = snapshot.getNamespace()    != null ? snapshot.getNamespace()    : "default";
         String kubeconfig  = snapshot.getKubeconfig()   != null ? snapshot.getKubeconfig()   : "";
         Map<String, List<Object>> baselineSpecs = snapshot.getResourceSpecs();
 
-        try (KubernetesClient liveClient = clientFactory.createClient(kubeconfig != null && !kubeconfig.isBlank() ? "KUBECONFIG" : (jumpHost.isBlank() ? "DIRECT" : "JUMP"), clusterUrl, "", jumpHost, jumpUser, "", kubeconfig)) {
+        try (KubernetesClient liveClient = clientFactory.createClient(kubeconfig != null && !kubeconfig.isBlank() ? "KUBECONFIG" : (jumpHost.isBlank() ? "DIRECT" : "JUMP"), clusterUrl, token, jumpHost, jumpUser, jumpPassword, kubeconfig)) {
             Map<String, Object> diffResults = new HashMap<>();
 
             if (baselineSpecs.containsKey("deployments")) {

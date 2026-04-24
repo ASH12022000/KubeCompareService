@@ -52,6 +52,7 @@ public class BaselineController {
         try {
             String namespace    = (String) body.getOrDefault("namespace", "default");
             String clusterUrl   = (String) body.getOrDefault("clusterUrl", "");
+            String token        = (String) body.getOrDefault("token", "");
             String jumpHost     = (String) body.getOrDefault("jumpHost", "");
             String jumpUser     = (String) body.getOrDefault("jumpUser", "");
             String jumpPassword = (String) body.getOrDefault("jumpPassword", "");
@@ -83,14 +84,16 @@ public class BaselineController {
             BaselineSnapshot snapshot = baselineService.captureAndSave(
                 environmentId, namespace, checks,
                 jumpHost, jumpUser, jumpPassword,
-                clusterUrl, "", kubeconfig
+                clusterUrl, token, kubeconfig
             );
             snapshot.setUserId(userId);
             snapshot.setName(name);
             snapshot.setNamespace(namespace);
             snapshot.setClusterUrl(clusterUrl);
+            snapshot.setToken(token);
             snapshot.setJumpHost(jumpHost);
             snapshot.setJumpUser(jumpUser);
+            snapshot.setJumpPassword(jumpPassword);
             snapshot.setKubeconfig(kubeconfig);
             snapshot.setEnvironmentId(environmentId);
             snapshot.setTimestamp(Instant.now().toString());

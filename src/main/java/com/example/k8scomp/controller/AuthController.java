@@ -147,4 +147,9 @@ public class AuthController {
         authService.reportBug(request.get("userId"), request.get("subject"), request.get("description"));
         return ResponseEntity.ok(Map.of("message", "Bug report sent successfully"));
     }
+
+    @GetMapping("/validate")
+    public ResponseEntity<?> validateToken() {
+        return ResponseEntity.ok(Map.of("valid", true));
+    }
 }

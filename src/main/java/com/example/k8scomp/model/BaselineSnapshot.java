@@ -16,8 +16,10 @@ public class BaselineSnapshot {
     private String environmentId;  // logical env identifier (jumpHost:namespace)
     private String namespace;
     private String clusterUrl;
+    private String token;
     private String jumpHost;
     private String jumpUser;
+    private String jumpPassword;
     private String kubeconfig;
     private String timestamp;
     private Map<String, List<Object>> resourceSpecs;
