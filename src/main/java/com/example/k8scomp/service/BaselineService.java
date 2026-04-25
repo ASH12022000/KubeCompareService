@@ -35,24 +35,30 @@ public class BaselineService {
             String clusterUrl, String token, String kubeconfig) throws Exception {
 
         try (KubernetesClient client = clientFactory.createClient(
-                kubeconfig != null && !kubeconfig.isBlank() ? "KUBECONFIG" : (jumpHost.isBlank() ? "DIRECT" : "JUMP"),
+                org.springframework.util.StringUtils.hasText(kubeconfig) ? "KUBECONFIG" : (!org.springframework.util.StringUtils.hasText(jumpHost) ? "DIRECT" : "JUMP"),
                 clusterUrl, token, jumpHost, jumpUser, jumpPassword, kubeconfig)) {
 
             Map<String, List<Object>> specs = new HashMap<>();
 
             if (checks.contains("DEPLOYMENTS")) {
-                specs.put("deployments",
-                        (List<Object>) (List<?>) client.apps().deployments().inNamespace(ns).list().getItems());
+                var items = client.apps().deployments().inNamespace(ns).list().getItems();
+                items.forEach(comparisonService::sanitizeResource);
+                specs.put("deployments", (List<Object>) (List<?>) items);
             }
             if (checks.contains("CONFIGMAPS")) {
-                specs.put("configmaps", (List<Object>) (List<?>) client.configMaps().inNamespace(ns).list().getItems());
+                var items = client.configMaps().inNamespace(ns).list().getItems();
+                items.forEach(comparisonService::sanitizeResource);
+                specs.put("configmaps", (List<Object>) (List<?>) items);
             }
             if (checks.contains("SERVICES")) {
-                specs.put("services", (List<Object>) (List<?>) client.services().inNamespace(ns).list().getItems());
+                var items = client.services().inNamespace(ns).list().getItems();
+                items.forEach(comparisonService::sanitizeResource);
+                specs.put("services", (List<Object>) (List<?>) items);
             }
             if (checks.contains("PVC")) {
-                specs.put("pvcs",
-                        (List<Object>) (List<?>) client.persistentVolumeClaims().inNamespace(ns).list().getItems());
+                var items = client.persistentVolumeClaims().inNamespace(ns).list().getItems();
+                items.forEach(comparisonService::sanitizeResource);
+                specs.put("pvcs", (List<Object>) (List<?>) items);
             }
             if (checks.contains("IMAGES")) {
                 // Extract container images from deployments
@@ -63,14 +69,16 @@ public class BaselineService {
                 specs.put("images", images);
             }
             if (checks.contains("VIRTUALSERVICES")) {
-                specs.put("virtualservices", (List<Object>) (List<?>) client
-                        .resources(io.fabric8.istio.api.networking.v1alpha3.VirtualService.class)
-                        .inNamespace(ns).list().getItems());
+                var items = client.resources(io.fabric8.istio.api.networking.v1alpha3.VirtualService.class)
+                        .inNamespace(ns).list().getItems();
+                items.forEach(comparisonService::sanitizeResource);
+                specs.put("virtualservices", (List<Object>) (List<?>) items);
             }
             if (checks.contains("AUTH_POLICY")) {
-                specs.put("authpolicies", (List<Object>) (List<?>) client
-                        .resources(io.fabric8.istio.api.security.v1beta1.AuthorizationPolicy.class)
-                        .inNamespace(ns).list().getItems());
+                var items = client.resources(io.fabric8.istio.api.security.v1beta1.AuthorizationPolicy.class)
+                        .inNamespace(ns).list().getItems();
+                items.forEach(comparisonService::sanitizeResource);
+                specs.put("authpolicies", (List<Object>) (List<?>) items);
             }
 
             BaselineSnapshot snapshot = new BaselineSnapshot();
@@ -99,7 +107,9 @@ public class BaselineService {
         String kubeconfig  = snapshot.getKubeconfig()   != null ? snapshot.getKubeconfig()   : "";
         Map<String, List<Object>> baselineSpecs = snapshot.getResourceSpecs();
 
-        try (KubernetesClient liveClient = clientFactory.createClient(kubeconfig != null && !kubeconfig.isBlank() ? "KUBECONFIG" : (jumpHost.isBlank() ? "DIRECT" : "JUMP"), clusterUrl, token, jumpHost, jumpUser, jumpPassword, kubeconfig)) {
+        try (KubernetesClient liveClient = clientFactory.createClient(
+                org.springframework.util.StringUtils.hasText(kubeconfig) ? "KUBECONFIG" : (!org.springframework.util.StringUtils.hasText(jumpHost) ? "DIRECT" : "JUMP"),
+                clusterUrl, token, jumpHost, jumpUser, jumpPassword, kubeconfig)) {
             Map<String, Object> diffResults = new HashMap<>();
 
             if (baselineSpecs.containsKey("deployments")) {

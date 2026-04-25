@@ -21,6 +21,9 @@ public class K8sClientFactory {
         log.info("Creating K8s client: type={}, clusterUrl={}, jumpHost={}", type, clusterUrl, jumpHost);
 
         if ("KUBECONFIG".equalsIgnoreCase(type)) {
+            if (!org.springframework.util.StringUtils.hasText(kubeconfig)) {
+                throw new IllegalArgumentException("Kubeconfig content is missing for KUBECONFIG connection type");
+            }
             log.info("Creating client from kubeconfig content");
             return new KubernetesClientBuilder()
                     .withConfig(Config.fromKubeconfig(kubeconfig))
@@ -29,18 +32,28 @@ public class K8sClientFactory {
 
         if ("JUMP".equalsIgnoreCase(type)) {
             log.info("Establishing SSH tunnel to {}@{}:22", jumpUser, jumpHost);
-            JSch jsch = new JSch();
-            Session session = jsch.getSession(jumpUser, jumpHost, 22);
-            session.setPassword(jumpPassword);
-            session.setConfig("StrictHostKeyChecking", "no");
-            session.connect();
-            log.info("SSH session connected to {}", jumpHost);
+            if (!org.springframework.util.StringUtils.hasText(jumpHost) || !org.springframework.util.StringUtils.hasText(jumpUser)) {
+                throw new IllegalArgumentException("Jump host or user missing for JUMP connection type");
+            }
+            
+            Session session = null;
+            try {
+                JSch jsch = new JSch();
+                session = jsch.getSession(jumpUser, jumpHost, 22);
+                session.setPassword(org.springframework.util.StringUtils.hasText(jumpPassword) ? jumpPassword : "");
+                session.setConfig("StrictHostKeyChecking", "no");
+                session.connect();
+                log.info("SSH session connected to {}", jumpHost);
 
-            int localPort = new Random().nextInt(1000) + 7000;
-            session.setPortForwardingL(localPort, clusterUrl, 6443);
-            log.info("SSH port-forward established: localhost:{} → {}:6443", localPort, clusterUrl);
+                int localPort = new Random().nextInt(1000) + 7000;
+                session.setPortForwardingL(localPort, org.springframework.util.StringUtils.hasText(clusterUrl) ? clusterUrl : "localhost", 6443);
+                log.info("SSH port-forward established: localhost:{} → {}:6443", localPort, clusterUrl);
 
-            clusterUrl = "https://localhost:" + localPort;
+                clusterUrl = "https://localhost:" + localPort;
+            } catch (Exception e) {
+                if (session != null && session.isConnected()) session.disconnect();
+                throw e;
+            }
         }
 
         Config config = new ConfigBuilder()

@@ -98,6 +98,8 @@ public class ComparisonService {
             if (baseline == null) {
                 diff.put("status", "ONLY_IN_LIVE");
             } else {
+                sanitizeResource(live);
+                sanitizeResource(baseline);
                 // Simplified comparison: compare string representations
                 boolean equal = Objects.equals(live.toString(), baseline.toString());
                 diff.put("status", equal ? "MATCH" : "DIFFERENT");
@@ -119,8 +121,12 @@ public class ComparisonService {
             Map<String, Object> diff = new HashMap<>();
             diff.put("name", name);
             if (r2 == null) {
+                sanitizeResource(r1);
                 diff.put("status", "ONLY_IN_CLUSTER_1");
+                diff.put("cluster1Value", r1);
             } else {
+                sanitizeResource(r1);
+                sanitizeResource(r2);
                 boolean equal = Objects.equals(r1.toString(), r2.toString());
                 diff.put("status", equal ? "MATCH" : "DIFFERENT");
                 diff.put("cluster1Value", r1);
@@ -129,6 +135,22 @@ public class ComparisonService {
             results.add(diff);
         }
         return results;
+    }
+
+    public void sanitizeResource(Object resource) {
+        if (resource == null) return;
+        if (resource instanceof HasMetadata) {
+            HasMetadata hasMetadata = (HasMetadata) resource;
+            if (hasMetadata.getMetadata() != null) {
+                hasMetadata.getMetadata().setManagedFields(null);
+            }
+        } else if (resource instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) resource;
+            Object metadata = map.get("metadata");
+            if (metadata instanceof Map) {
+                ((Map<String, Object>) metadata).remove("managedFields");
+            }
+        }
     }
 
     private Map<String, String> extractImageTags(List<Deployment> deps) {
@@ -141,3 +163,4 @@ public class ComparisonService {
         return images;
     }
 }
+

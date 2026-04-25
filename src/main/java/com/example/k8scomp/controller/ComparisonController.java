@@ -56,6 +56,7 @@ public class ComparisonController {
 
     @PostMapping("/connect")
     public ResponseEntity<?> testConnection(@RequestBody SavedEnvironment env) {
+        if (env == null) return ResponseEntity.badRequest().body(Map.of("status", "ERROR", "message", "Environment data missing"));
         log.info("Connection test: type={}, jumpHost={}, clusterUrl={}", env.getType(), env.getJumpHost(), env.getClusterUrl());
         try {
             KubernetesClient client = clientFactory.createClient(env.getType(), env.getClusterUrl(),
@@ -77,14 +78,16 @@ public class ComparisonController {
             request.getUserId(), request.getNs1(), request.getNs2(), request.getChecks());
         try {
             SavedEnvironment env1 = request.getEnv1();
-            log.debug("Creating K8s client for cluster1: type={}, jumpHost={}", env1.getType(), env1.getJumpHost());
+            if (env1 == null) throw new RuntimeException("Primary environment data (env1) missing");
+            log.debug("Creating K8s client for cluster1: type={}, clusterUrl={}, jumpHost={}", env1.getType(), env1.getClusterUrl(), env1.getJumpHost());
             KubernetesClient c1 = clientFactory.createClient(env1.getType(), env1.getClusterUrl(),
                                                            env1.getEncryptedToken(), env1.getJumpHost(),
                                                            env1.getJumpUser(), env1.getEncryptedJumpPassword(),
                                                            env1.getKubeconfig());
 
             SavedEnvironment env2 = request.getEnv2();
-            log.debug("Creating K8s client for cluster2: type={}, jumpHost={}", env2.getType(), env2.getJumpHost());
+            if (env2 == null) throw new RuntimeException("Comparison environment data (env2) missing");
+            log.debug("Creating K8s client for cluster2: type={}, clusterUrl={}, jumpHost={}", env2.getType(), env2.getClusterUrl(), env2.getJumpHost());
             KubernetesClient c2 = clientFactory.createClient(env2.getType(), env2.getClusterUrl(),
                                                            env2.getEncryptedToken(), env2.getJumpHost(),
                                                            env2.getJumpUser(), env2.getEncryptedJumpPassword(),

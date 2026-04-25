@@ -24,6 +24,14 @@ public class BaselineController {
         this.baselineRepository = baselineRepository;
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<BaselineSnapshot> getBaseline(@PathVariable String id) {
+        log.info("Fetching baseline id={}", id);
+        return baselineRepository.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<BaselineSnapshot>> getUserBaselines(@PathVariable String userId) {
         log.info("Fetching baselines for userId={}", userId);
@@ -46,23 +54,23 @@ public class BaselineController {
 
     @PostMapping("/save")
     public ResponseEntity<?> saveBaseline(@RequestBody Map<String, Object> body) {
-        String userId = (String) body.getOrDefault("userId", "anonymous");
-        String name   = (String) body.getOrDefault("name", "My Baseline");
+        String userId = getString(body, "userId", "anonymous");
+        String name   = getString(body, "name", "My Baseline");
         log.info("Save baseline request: userId={}, name={}", userId, name);
         try {
-            String namespace    = (String) body.getOrDefault("namespace", "default");
-            String clusterUrl   = (String) body.getOrDefault("clusterUrl", "");
-            String token        = (String) body.getOrDefault("token", "");
-            String jumpHost     = (String) body.getOrDefault("jumpHost", "");
-            String jumpUser     = (String) body.getOrDefault("jumpUser", "");
-            String jumpPassword = (String) body.getOrDefault("jumpPassword", "");
-            String kubeconfig   = (String) body.getOrDefault("kubeconfig", "");
+            String namespace    = getString(body, "namespace", "default");
+            String clusterUrl   = getString(body, "clusterUrl", "");
+            String token        = getString(body, "token", "");
+            String jumpHost     = getString(body, "jumpHost", "");
+            String jumpUser     = getString(body, "jumpUser", "");
+            String jumpPassword = getString(body, "jumpPassword", "");
+            String kubeconfig   = getString(body, "kubeconfig", "");
             boolean override    = Boolean.TRUE.equals(body.get("override"));
             @SuppressWarnings("unchecked")
             List<String> checks = (List<String>) body.getOrDefault("checks", List.of("DEPLOYMENTS", "CONFIGMAPS"));
 
-            String environmentId = !kubeconfig.isBlank() ? "kubeconfig:" + namespace :
-                                  (jumpHost.isBlank() ? (clusterUrl + ":" + namespace) : (jumpHost + ":" + namespace));
+            String environmentId = org.springframework.util.StringUtils.hasText(kubeconfig) ? "kubeconfig:" + namespace :
+                                  (!org.springframework.util.StringUtils.hasText(jumpHost) ? (clusterUrl + ":" + namespace) : (jumpHost + ":" + namespace));
             log.debug("Computed environmentId={}, override={}, checks={}", environmentId, override, checks);
 
             Optional<BaselineSnapshot> existing = baselineRepository.findByUserIdAndEnvironmentId(userId, environmentId);
@@ -135,5 +143,11 @@ public class BaselineController {
             log.error("Baseline comparison FAILED for snapshotId={}: {}", snapshotId, e.getMessage(), e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
         }
+    }
+
+    private String getString(Map<String, Object> body, String key, String defaultValue) {
+        Object val = body.get(key);
+        if (val == null) return defaultValue;
+        return String.valueOf(val);
     }
 }
