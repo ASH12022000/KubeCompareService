@@ -115,7 +115,7 @@ public class AuthService {
                 });
     }
 
-    public Map<String, String> login(String email, String password) {
+    public Map<String, Object> login(String email, String password) {
         log.info("Login attempt: email={}", email);
         return userRepository.findByEmail(email)
                 .filter(user -> {
@@ -129,10 +129,32 @@ public class AuthService {
                 })
                 .map(user -> {
                     String token = jwtUtils.generateToken(email);
+                    String refreshToken = jwtUtils.generateRefreshToken(email);
                     log.info("JWT issued for email={}, userId={}", email, user.getId());
-                    return Map.of("token", token, "userId", user.getId(), "email", user.getEmail());
+                    return Map.<String, Object>of(
+                            "token", token,
+                            "refreshToken", refreshToken,
+                            "expiresIn", jwtUtils.getJwtExpirationMs(),
+                            "userId", user.getId(),
+                            "email", user.getEmail()
+                    );
                 })
                 .orElse(null);
+    }
+
+    public Map<String, Object> refreshToken(String refreshToken) {
+        if (jwtUtils.validateToken(refreshToken)) {
+            String email = jwtUtils.getEmailFromToken(refreshToken);
+            String newToken = jwtUtils.generateToken(email);
+            String newRefreshToken = jwtUtils.generateRefreshToken(email);
+            return Map.<String, Object>of(
+                    "token", newToken,
+                    "refreshToken", newRefreshToken,
+                    "expiresIn", jwtUtils.getJwtExpirationMs()
+            );
+        }
+        log.warn("Invalid or expired refresh token");
+        throw new IllegalArgumentException("Invalid refresh token");
     }
 
     public boolean forgotPassword(String email) {

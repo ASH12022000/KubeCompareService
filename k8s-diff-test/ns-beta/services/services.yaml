@@ -1,0 +1,32 @@
+# ns-beta services
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-svc
+  namespace: ns-beta
+  labels:
+    app: nginx
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-svc
+  namespace: ns-beta
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+  type: ClusterIP

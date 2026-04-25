@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: ns-alpha
+data:
+  LOG_LEVEL: "debug"             # DIFF: ns-beta uses "info"
+  DB_HOST: "postgres-staging"   # DIFF: ns-beta uses "postgres-prod"
+  DB_PORT: "5432"
+  CACHE_TTL: "60"                # DIFF: ns-beta uses "300"
+  FEATURE_FLAG_NEW_UI: "true"    # DIFF: ns-beta has this as "false"
+  MAX_CONNECTIONS: "10"          # DIFF: ns-beta uses "50"
+  APP_ENV: "staging"

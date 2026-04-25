@@ -1,0 +1,33 @@
+# Istio VirtualService — ns-alpha uses canary split (80/20)
+# Requires Istio to be installed. If not using Istio, skip this file.
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-vs
+  namespace: ns-alpha
+spec:
+  hosts:
+    - nginx-svc
+  http:
+    - match:
+        - headers:
+            x-canary:
+              exact: "true"
+      route:
+        - destination:
+            host: nginx-svc
+            subset: canary
+          weight: 100
+    - route:
+        - destination:
+            host: nginx-svc
+            subset: stable
+          weight: 80         # DIFF: ns-beta routes 100% to stable
+        - destination:
+            host: nginx-svc
+            subset: canary
+          weight: 20
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+      timeout: 10s           # DIFF: ns-beta uses 30s

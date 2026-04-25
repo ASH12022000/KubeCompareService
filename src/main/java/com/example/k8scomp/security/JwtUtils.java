@@ -1,5 +1,6 @@
 package com.example.k8scomp.security;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
@@ -22,14 +23,33 @@ public class JwtUtils {
     @Value("${app.security.jwt-expiration-ms}")
     private int jwtExpirationMs;
 
+    @Value("${app.security.jwt-refresh-expiration-ms:604800000}")
+    private int jwtRefreshExpirationMs;
+
+    public int getJwtExpirationMs() {
+        return jwtExpirationMs;
+    }
+
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateToken(String email) {
-        Date now    = new Date();
+        Date now = new Date();
         Date expiry = new Date(now.getTime() + jwtExpirationMs);
         log.debug("Generating JWT for email={}, expiresAt={}", email, expiry);
+        return Jwts.builder()
+                .subject(email)
+                .issuedAt(now)
+                .expiration(expiry)
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    public String generateRefreshToken(String email) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + jwtRefreshExpirationMs);
+        log.debug("Generating Refresh JWT for email={}, expiresAt={}", email, expiry);
         return Jwts.builder()
                 .subject(email)
                 .issuedAt(now)
@@ -47,10 +67,23 @@ public class JwtUtils {
                 .getSubject();
     }
 
+    public Claims extractClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+
+    public boolean isTokenExpired(String token) {
+        Date expirationDate = extractClaims(token).getExpiration();
+        return expirationDate.before(new Date());
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token);
-            return true;
+            return true && !isTokenExpired(token);
         } catch (Exception e) {
             log.warn("JWT validation failed: {}", e.getMessage());
             return false;

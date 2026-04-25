@@ -1,0 +1,20 @@
+# Istio VirtualService — ns-beta routes 100% to stable
+# Requires Istio to be installed. If not using Istio, skip this file.
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-vs
+  namespace: ns-beta
+spec:
+  hosts:
+    - nginx-svc
+  http:
+    - route:
+        - destination:
+            host: nginx-svc
+            subset: stable
+          weight: 100        # DIFF: ns-alpha has 80 stable + 20 canary
+      retries:
+        attempts: 5          # DIFF: ns-alpha uses 3
+        perTryTimeout: 5s
+      timeout: 30s           # DIFF: ns-alpha uses 10s

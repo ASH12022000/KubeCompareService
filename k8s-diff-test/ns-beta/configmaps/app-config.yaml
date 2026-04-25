@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: ns-beta
+data:
+  LOG_LEVEL: "info"              # DIFF: ns-alpha uses "debug"
+  DB_HOST: "postgres-prod"      # DIFF: ns-alpha uses "postgres-staging"
+  DB_PORT: "5432"
+  CACHE_TTL: "300"               # DIFF: ns-alpha uses "60"
+  FEATURE_FLAG_NEW_UI: "false"   # DIFF: ns-alpha has "true"
+  MAX_CONNECTIONS: "50"          # DIFF: ns-alpha uses "10"
+  APP_ENV: "production"
+  SENTRY_DSN: "https://sentry.example.com/prod"  # DIFF: only exists in ns-beta

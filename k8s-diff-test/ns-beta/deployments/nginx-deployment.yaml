@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: ns-beta
+  labels:
+    app: nginx
+    version: v1
+spec:
+  replicas: 4          # DIFF: ns-alpha has 2 replicas
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+        version: v1
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "250m"            # DIFF: ns-alpha has 100m
+              memory: "128Mi"        # DIFF: ns-alpha has 64Mi
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          env:
+            - name: ENV_NAME
+              value: "production"    # DIFF: ns-alpha has "staging"

@@ -60,13 +60,27 @@ public class AuthController {
     public ResponseEntity<?> login(@RequestBody Map<String, String> request) {
         String email = request.get("email");
         log.info("Login attempt for email={}", email);
-        Map<String, String> result = authService.login(email, request.get("password"));
+        Map<String, Object> result = authService.login(email, request.get("password"));
         if (result != null) {
             log.info("Login SUCCESS for email={}, userId={}", email, result.get("userId"));
             return ResponseEntity.ok(result);
         }
         log.warn("Login FAILED for email={} — invalid credentials or unverified account", email);
         return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials or account not verified"));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(@RequestBody Map<String, String> request) {
+        String refreshToken = request.get("refreshToken");
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Refresh token is missing"));
+        }
+        try {
+            Map<String, Object> newTokens = authService.refreshToken(refreshToken);
+            return ResponseEntity.ok(newTokens);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(401).body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/forgot-password")
